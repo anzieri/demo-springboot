@@ -18,6 +18,7 @@ pipeline {
                 sh 'mvn package -DskipTests'
                 stash includes: 'target/*.jar, version.txt', name: 'app-binaries'
             }
+            
         }
 
         stage('Dockerize') {
