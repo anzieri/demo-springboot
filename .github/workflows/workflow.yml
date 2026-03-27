@@ -38,8 +38,9 @@ jobs:
 
       - name: Build and Push
         run: |
+          # Use lowercase for image names (Docker Hub requirement)
+          IMAGE_NAME=$(echo "${{ secrets.DOCKER_USER }}/${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
           FULL_VERSION="${{ env.BASE_VERSION }}.${{ github.run_number }}"
-          IMAGE_NAME="${{ secrets.DOCKER_USER }}/${{ github.event.repository.name }}"
           docker build -t $IMAGE_NAME:$FULL_VERSION .
           docker tag $IMAGE_NAME:$FULL_VERSION $IMAGE_NAME:latest
           docker push $IMAGE_NAME:$FULL_VERSION
