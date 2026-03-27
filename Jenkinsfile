@@ -1,47 +1,52 @@
 pipeline {
-    agent any // Main agent that stays active
-
+    agent any
     environment {
-        DOCKER_USER = "anzieri"
-        DOCKER_CREDS = credentials('docker-hub-credentials-id')
-        // Force lowercase repo name for Docker Hub compatibility
-        REPO_NAME = "${env.JOB_BASE_NAME}".toLowerCase()
+            DOCKER_USER = "anzieri"
+            DOCKER_CREDS = credentials('docker-hub-credentials-id')
+            // Force lowercase repo name for Docker Hub compatibility
+            REPO_NAME = "${env.JOB_BASE_NAME}".toLowerCase()
     }
 
     stages {
-        stage('Build & Test') {
-            agent {
-                docker {
-                    image 'maven:3-eclipse-temurin-21-jammy'
-                    // Reuse the same workspace to avoid missing files
-                    reuseNode true
-                }
-            }
+        stage('Build') {
+            agent { image 'maven:3-eclipse-temurin-21-jammy' }
             steps {
                 sh 'mvn clean compile'
+                // Extract version
                 sh "mvn help:evaluate -Dexpression=project.version -q -DforceStdout | cut -d'-' -f1 > version.txt"
-                sh 'mvn test -Dspring.profiles.active=test'
-                sh 'mvn package -DskipTests'
+                stash includes: 'target/**, version.txt', name: 'build-artifacts'
+            }
+        }
 
-                // CRITICAL: Include the Dockerfile in your stash!
-                stash includes: 'target/*.jar, version.txt, Dockerfile', name: 'app-binaries'
+        stage('Test') {
+            agent { image 'maven:3-eclipse-temurin-21-jammy' }
+            steps {
+                unstash 'build-artifacts'
+                sh 'mvn test -Dspring.profiles.active=test'
+            }
+        }
+
+        stage('Package') {
+            agent { image 'maven:3-eclipse-temurin-21-jammy' }
+            steps {
+                unstash 'build-artifacts'
+                sh 'mvn package -DskipTests'
+                stash includes: 'target/*.jar, version.txt', name: 'final-jar'
             }
         }
 
         stage('Dockerize') {
             steps {
-                unstash 'app-binaries'
+                unstash 'final-jar'
                 script {
                     def baseVersion = readFile('version.txt').trim()
                     def fullVersion = "${baseVersion}.${env.BUILD_NUMBER}"
 
                     sh "echo ${DOCKER_CREDS_PSW} | docker login -u ${DOCKER_CREDS_USR} --password-stdin"
-
-                    sh "docker build -t ${DOCKER_USER}/${REPO_NAME}:${fullVersion} ."
-                    sh "docker tag ${DOCKER_USER}/${REPO_NAME}:${fullVersion} ${DOCKER_USER}/${REPO_NAME}:latest"
-
-                    sh "docker push ${DOCKER_USER}/${REPO_NAME}:${fullVersion}"
-                    sh "docker push ${DOCKER_USER}/${REPO_NAME}:latest"
+                    sh "docker build -t ${DOCKER_IMAGE}:${fullVersion} ."
+                    sh "docker tag ${DOCKER_IMAGE}:${fullVersion} ${DOCKER_IMAGE}:latest"
+                    sh "docker push ${DOCKER_IMAGE}:${fullVersion}"
+                    sh "docker push ${DOCKER_IMAGE}:latest"
                 }
             }
         }
@@ -49,8 +54,7 @@ pipeline {
 
     post {
         always {
-            // Keep your Pi clean!
-            sh 'docker system prune -f'
+            sh 'docker system prune -af'
         }
     }
 }
