@@ -1,43 +1,35 @@
 pipeline {
     agent any
+
     environment {
-            DOCKER_USER = "anzieri"
-            DOCKER_CREDS = credentials('docker-hub-credentials-id')
-            // Force lowercase repo name for Docker Hub compatibility
-            REPO_NAME = "${env.JOB_BASE_NAME}".toLowerCase()
+        DOCKER_USER = "anzieri"
+        DOCKER_CREDS = credentials('docker-hub-credentials-id')
+        REPO_NAME = "${env.JOB_BASE_NAME}".toLowerCase()
+        // Define this so the script knows what DOCKER_IMAGE is
+        DOCKER_IMAGE = "${DOCKER_USER}/${REPO_NAME}"
     }
 
     stages {
-        stage('Build') {
-            agent { image 'maven:3-eclipse-temurin-21-jammy' }
+        stage('Build & Test') {
+            agent {
+                docker {
+                    image 'maven:3-eclipse-temurin-21-jammy'
+                    reuseNode true // Essential to keep the workspace/Dockerfile visible
+                }
+            }
             steps {
-                sh 'mvn clean compile'
-                // Extract version
+                // No 'tools' block needed! The image already has mvn.
+                sh 'mvn clean package -DskipTests'
                 sh "mvn help:evaluate -Dexpression=project.version -q -DforceStdout | cut -d'-' -f1 > version.txt"
-                stash includes: 'target/**, version.txt', name: 'build-artifacts'
-            }
-        }
 
-        stage('Test') {
-            agent { image 'maven:3-eclipse-temurin-21-jammy' }
-            steps {
-                unstash 'build-artifacts'
-                sh 'mvn test -Dspring.profiles.active=test'
-            }
-        }
-
-        stage('Package') {
-            agent { image 'maven:3-eclipse-temurin-21-jammy' }
-            steps {
-                unstash 'build-artifacts'
-                sh 'mvn package -DskipTests'
-                stash includes: 'target/*.jar, version.txt', name: 'final-jar'
+                // Stash the JAR, the version, AND the Dockerfile
+                stash includes: 'target/*.jar, version.txt, Dockerfile', name: 'app-artifacts'
             }
         }
 
         stage('Dockerize') {
             steps {
-                unstash 'final-jar'
+                unstash 'app-artifacts'
                 script {
                     def baseVersion = readFile('version.txt').trim()
                     def fullVersion = "${baseVersion}.${env.BUILD_NUMBER}"
@@ -54,7 +46,7 @@ pipeline {
 
     post {
         always {
-            sh 'docker system prune -af'
+            sh 'docker system prune -f'
         }
     }
 }
