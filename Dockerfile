@@ -14,7 +14,9 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Create a non-root user for security
-RUN useradd -m amara
+
+#RUN useradd -m amara # Alpine doesn't have useradd like Debian/Ubuntu, use adduser instead
+RUN adduser -D amara
 USER amara
 
 # Copy the built JAR file from the 'build' stage
