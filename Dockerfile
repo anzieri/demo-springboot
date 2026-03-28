@@ -11,6 +11,6 @@ USER amara
 # created by the 'mvn package' step in your GitHub Action
 COPY target/*.jar app.jar
 
-EXPOSE 8080
+EXPOSE 8082
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

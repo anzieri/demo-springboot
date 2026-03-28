@@ -42,6 +42,10 @@ jobs:
           IMAGE_NAME=$(echo "${{ secrets.DOCKER_USER }}/${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
           FULL_VERSION="${{ env.BASE_VERSION }}.${{ github.run_number }}"
           docker build -t $IMAGE_NAME:$FULL_VERSION .
+          docker run -d -p 8080:8082 -p 8081:8083 --name test-container $IMAGE_NAME:$FULL_VERSION
+          sleep 10      
+          curl -f http://localhost:8081/monitor/health || (echo "Health check failed" && exit 1)
+          docker rm -f test-container
           docker tag $IMAGE_NAME:$FULL_VERSION $IMAGE_NAME:latest
           docker push $IMAGE_NAME:$FULL_VERSION
           docker push $IMAGE_NAME:latest
