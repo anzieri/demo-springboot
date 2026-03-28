@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKER_USER = "anzieri"
-        DOCKER_CREDS = credentials('DOCKER_PASSWORD')
+        DOCKER_PAT = credentials('DOCKER_PAT')
         REPO_NAME = "${env.JOB_BASE_NAME}".toLowerCase()
         DOCKER_IMAGE = "${DOCKER_USER}/${REPO_NAME}"
     }
@@ -33,7 +33,7 @@ pipeline {
                     def baseVersion = readFile('version.txt').trim()
                     def fullVersion = "${baseVersion}.${env.BUILD_NUMBER}"
 
-                    sh "echo ${DOCKER_CREDS} | docker login -u ${DOCKER_USER} --password-stdin"
+                    sh "echo ${DOCKER_PAT} | docker login -u ${DOCKER_USER} --password-stdin"
                     sh "docker build -t ${DOCKER_IMAGE}:${fullVersion} ."
                     sh "docker run -d -p 8080:8082 -p 8081:8083 --name test-container ${DOCKER_IMAGE}:${fullVersion}"
                     sh "sleep 10"
